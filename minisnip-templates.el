@@ -8,21 +8,86 @@
 
 (require 'minisnip)
 
-(defconst minisnip--latex-modes '(latex-mode LaTeX-mode)
+(defconst minisnip--latex-modes '(latex-mode)
   "Major modes that receive the LaTeX templates.")
 
-(defconst minisnip--math-modes '(latex-mode LaTeX-mode minimd-ts-mode)
+(defconst minisnip--math-modes '(latex-mode minimd-ts-mode)
   "Major modes that receive the math-environment templates.")
 
 (declare-function texmathp "texmathp")
 (declare-function minimd-math-p "minimd")
 
+(defconst minisnip--latex-math-envs
+  '("align" "align*" "alignat" "alignat*" "aligned" "array" "bmatrix"
+    "cases" "dcases" "dcases*" "displaymath" "eqnarray" "eqnarray*"
+    "equation" "equation*" "gather" "gather*" "gathered" "matrix"
+    "multline" "multline*" "pmatrix" "smallmatrix" "split" "vmatrix"
+    "Vmatrix")
+  "Environments whose contents are typeset in math mode.")
+
+(defun minisnip--latex-escaped-p (pos)
+  "Non-nil when the character at POS is escaped by a backslash."
+  (let ((n 0))
+    (while (eq (char-before (- pos n)) ?\\) (setq n (1+ n)))
+    (= 1 (% n 2))))
+
+(defun minisnip--latex-commented-p (pos)
+  "Non-nil when POS is behind an unescaped % on its line."
+  (save-excursion
+    (goto-char pos)
+    (beginning-of-line)
+    (catch 'yes
+      (while (search-forward "%" pos t)
+        (unless (minisnip--latex-escaped-p (1- (point)))
+          (throw 'yes t))))))
+
+(defun minisnip--latex-dollar-parity (bound pos)
+  "Non-nil when an odd number of $-runs occur between BOUND and POS.
+A run of consecutive dollar signs ($ or $$) counts as one toggle."
+  (save-excursion
+    (goto-char bound)
+    (let ((n 0))
+      (while (re-search-forward "\\$+" pos t)
+        (unless (or (minisnip--latex-escaped-p (match-beginning 0))
+                    (minisnip--latex-commented-p (match-beginning 0)))
+          (setq n (1+ n))))
+      (= 1 (% n 2)))))
+
+(defun minisnip-latex-math-p ()
+  "Non-nil when point is inside LaTeX math."
+  (save-excursion
+    (let ((pos (point))
+          (bound (save-excursion
+                   (if (re-search-backward "\n[ \t]*\n" nil t)
+                       (match-end 0)
+                     (point-min))))
+          (answer nil))
+      (while (and (not answer)
+                  (re-search-backward
+                   "\\\\[][()]\\|\\$+\\|\\\\\\(begin\\|end\\)[ \t]*{\\([^}]*\\)}"
+                   bound t))
+        (let ((tok (match-string 0))
+              (beg (match-beginning 0))
+              (kind (match-string 1))
+              (env (match-string 2)))
+          (cond
+           ((minisnip--latex-commented-p beg) nil)
+           ((minisnip--latex-escaped-p beg) nil)
+           ((member tok '("\\(" "\\[")) (setq answer 'math))
+           ((member tok '("\\)" "\\]")) (setq answer 'text))
+           ((eq (char-after beg) ?$)
+            (setq answer (if (minisnip--latex-dollar-parity bound pos)
+                             'math 'text)))
+           (env
+            (setq answer (if (and (equal kind "begin")
+                                  (member env minisnip--latex-math-envs))
+                             'math 'text))))))
+      (eq answer 'math))))
+
 (defun minisnip-math-p ()
-  "Non-nil when point is inside a math environment, in any supported mode.
-Dispatches to `minimd-math-p' in `minimd-ts-mode' buffers and to AUCTeX's
-`texmathp' elsewhere."
+  "Non-nil when point is inside a math environment"
   (cond ((derived-mode-p 'minimd-ts-mode) (minimd-math-p))
-        ((fboundp 'texmathp) (texmathp))))
+        (t (minisnip-latex-math-p))))
 
 (defconst minisnip--matrix-envs '("pmatrix" "vmatrix" "Vmatrix")
   "Environment choices for matrix/vector templates.")

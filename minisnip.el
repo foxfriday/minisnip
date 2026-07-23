@@ -23,8 +23,8 @@
 ;; Usage:
 ;;   (require 'minisnip)
 ;;   (require 'minisnip-templates)
-;;   (add-hook 'LaTeX-mode-hook #'minisnip-mode)
-;;   (add-hook 'minimd-mode-hook #'minisnip-mode)
+;;   (add-hook 'latex-mode-hook #'minisnip-mode)
+;;   (add-hook 'minimd-ts-mode-hook #'minisnip-mode)
 
 ;;; Code:
 
@@ -41,11 +41,9 @@
 
 (defcustom minisnip-parents
   '((latex-mode text-mode)
-    (LaTeX-mode text-mode)
     (org-mode text-mode)
-    (minimd-mode text-mode))
-  "Alist mapping a major mode to modes whose snippets it inherits.
-This way `LaTeX-mode' can use snippets from `text-mode'."
+    (minimd-ts-mode text-mode))
+  "Alist mapping a major mode to modes whose snippets it inherits."
   :type '(alist :key-type symbol :value-type (repeat symbol)))
 
 (defcustom minisnip-fallback #'indent-for-tab-command
