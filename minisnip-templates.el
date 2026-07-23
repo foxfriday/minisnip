@@ -11,7 +11,7 @@
 (defconst minisnip--latex-modes '(latex-mode LaTeX-mode)
   "Major modes that receive the LaTeX templates.")
 
-(defconst minisnip--math-modes '(latex-mode LaTeX-mode minimd-mode)
+(defconst minisnip--math-modes '(latex-mode LaTeX-mode minimd-ts-mode)
   "Major modes that receive the math-environment templates.")
 
 (declare-function texmathp "texmathp")
@@ -19,9 +19,9 @@
 
 (defun minisnip-math-p ()
   "Non-nil when point is inside a math environment, in any supported mode.
-Dispatches to `minimd-math-p' in `minimd-mode' buffers and to AUCTeX's
+Dispatches to `minimd-math-p' in `minimd-ts-mode' buffers and to AUCTeX's
 `texmathp' elsewhere."
-  (cond ((derived-mode-p 'minimd-mode) (minimd-math-p))
+  (cond ((derived-mode-p 'minimd-ts-mode) (minimd-math-p))
         ((fboundp 'texmathp) (texmathp))))
 
 (defconst minisnip--matrix-envs '("pmatrix" "vmatrix" "Vmatrix")
@@ -246,7 +246,7 @@ Dispatches to `minimd-math-p' in `minimd-mode' buffers and to AUCTeX's
                          "\\end{" (s env) "} " p))
 
 ;;; Markdown (minimd)
-(minisnip-define 'minimd-mode
+(minisnip-define 'minimd-ts-mode
                  :key "image"
                  :body '((minisnip-pick 'file "Image file: " (minisnip-image-files))
                          "![" p "](" (s file) ")" p))
