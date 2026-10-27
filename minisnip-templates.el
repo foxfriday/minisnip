@@ -14,7 +14,6 @@
 (defconst minisnip--math-modes '(latex-mode minimd-ts-mode)
   "Major modes that receive the math-environment templates.")
 
-(declare-function texmathp "texmathp")
 (declare-function minimd-math-p "minimd")
 
 (defconst minisnip--latex-math-envs
@@ -53,6 +52,17 @@ A run of consecutive dollar signs ($ or $$) counts as one toggle."
           (setq n (1+ n))))
       (= 1 (% n 2)))))
 
+(defun minisnip--latex-skip-env (env bound)
+  "Move point back to the \\begin matching an \\end{ENV} just before point.
+Search no further back than BOUND.  Return non-nil when found."
+  (let ((re (concat "\\\\\\(begin\\|end\\)[ \t]*{" (regexp-quote env) "}"))
+        (depth 1))
+    (while (and (> depth 0) (re-search-backward re bound t))
+      (unless (or (minisnip--latex-commented-p (match-beginning 0))
+                  (minisnip--latex-escaped-p (match-beginning 0)))
+        (setq depth (if (equal (match-string 1) "end") (1+ depth) (1- depth)))))
+    (= depth 0)))
+
 (defun minisnip-latex-math-p ()
   "Non-nil when point is inside LaTeX math."
   (save-excursion
@@ -78,14 +88,20 @@ A run of consecutive dollar signs ($ or $$) counts as one toggle."
            ((eq (char-after beg) ?$)
             (setq answer (if (minisnip--latex-dollar-parity bound pos)
                              'math 'text)))
+           ;; A closed inner math environment (pmatrix, aligned, ...) says
+           ;; nothing by itself: skip it and keep looking further back.
+           ((and (equal kind "end") (member env minisnip--latex-math-envs))
+            (unless (minisnip--latex-skip-env env bound)
+              (setq answer 'text)))
            (env
             (setq answer (if (and (equal kind "begin")
                                   (member env minisnip--latex-math-envs))
                              'math 'text))))))
-      (eq answer 'math))))
+      (and (eq answer 'math)
+           (not (minisnip--latex-commented-p pos))))))
 
 (defun minisnip-math-p ()
-  "Non-nil when point is inside a math environment"
+  "Non-nil when point is inside a math environment."
   (cond ((derived-mode-p 'minimd-ts-mode) (minimd-math-p))
         (t (minisnip-latex-math-p))))
 
@@ -124,7 +140,7 @@ A run of consecutive dollar signs ($ or $$) counts as one toggle."
   :type '(repeat string)
   :group 'minisnip)
 
-;;; LaTeX -- require tab
+;;; LaTeX -- expand with TAB
 (minisnip-define minisnip--latex-modes
                  :key "align"
                  :body '((minisnip-pick 'env "Env: " '("align*" "align"))
@@ -155,18 +171,16 @@ A run of consecutive dollar signs ($ or $$) counts as one toggle."
 
 (minisnip-define minisnip--latex-modes
                  :key "list"
-                 :auto t
                  :body '("\\begin{itemize}[nosep]\n  \\item " p "\n\\end{itemize}"))
 
 (minisnip-define minisnip--latex-modes
                  :key "color"
-                 :auto t
                  :body '((minisnip-pick 'c "Color: " '("red" "blue" "green"))
                          "\\textcolor{" (s c) "}{" p "}"))
 
 (minisnip-define minisnip--latex-modes
                  :key "R"
-                 :body '("\\mathbb{R^{" p "}} " p))
+                 :body '("\\mathbb{R}^{" p "} " p))
 
 ;; Inline math \( ... \)
 (minisnip-define minisnip--latex-modes
@@ -184,7 +198,7 @@ A run of consecutive dollar signs ($ or $$) counts as one toggle."
                  :key "integral"
                  :auto t
                  :condition '(minisnip-math-p)
-                 :body '("\\int\\limits_{" (field "0") "}^{" (field "\\infty") "} " p ",\\mathrm{d}" p " " p))
+                 :body '("\\int\\limits_{" (field "0") "}^{" (field "\\infty") "} " p "\\,\\mathrm{d}" p " " p))
 
 (minisnip-define minisnip--math-modes
                  :key "intersect"
@@ -275,7 +289,7 @@ A run of consecutive dollar signs ($ or $$) counts as one toggle."
                          " " (s v) "_{1} &  &  & \\\\\n"
                          " & " (s v) "_{2} &  & \\\\\n"
                          " &  &  \\ddots & \\\\\n"
-                         " &  &   & " (s v) "_{3}\n"
+                         " &  &   & " (s v) "_{n}\n"
                          "\\end{" (s env) "} " p))
 
 (minisnip-define minisnip--math-modes
